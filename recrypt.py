@@ -1,16 +1,5 @@
-import crcmod, argparse
-
-jl_crc16 = crcmod.mkCrcFun(0x11021, rev=False, initCrc=0x0000, xorOut=0x0000)
-
-def jl_crypt(data, key=0xffff):
-    data = bytearray(data)
-
-    for i in range(len(data)):
-        data[i] ^= key & 0xff
-        key = ((key << 1) ^ (0x1021 if (key >> 15) else 0)) & 0xffff
-
-    return bytes(data)
-
+from jl_stuff import *
+import argparse
 
 ap = argparse.ArgumentParser(description='JieLi SFC data recryptor')
 
