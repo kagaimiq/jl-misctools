@@ -35,7 +35,7 @@ matcheds = {}
 for i in range(0x100):
     key = ((src[0] ^ ref[0]) * 0x0101) ^ (i << 8)
 
-    dec = jl_crypt(src, key)
+    dec = jl_crypt_enc(src, key)
 
     nmatched = 0
 

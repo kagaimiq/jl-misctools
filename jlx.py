@@ -28,5 +28,5 @@ with open(args.output, 'wb') as outf:
         while True:
             blk = inpf.read(blklen)
             if blk == b'': break
-            addr += outf.write(jl_crypt(blk, (key ^ (addr >> 2)) & 0xffff))
+            addr += outf.write(jl_crypt_enc(blk, (key ^ (addr >> 2)) & 0xffff))
 

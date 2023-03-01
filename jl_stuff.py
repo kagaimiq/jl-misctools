@@ -2,7 +2,7 @@ import crcmod
 
 jl_crc16 = crcmod.mkCrcFun(0x11021, rev=False, initCrc=0x0000, xorOut=0x0000)
 
-def jl_crypt(data, key=0xffff):
+def jl_crypt_enc(data, key=0xffff):
     data = bytearray(data)
 
     for i in range(len(data)):
@@ -11,7 +11,7 @@ def jl_crypt(data, key=0xffff):
 
     return bytes(data)
 
-def jl_cryptcrc(data, key=0xffffffff):
+def jl_crypt_mengli(data, key=0xffffffff):
     crc = key & 0xffff
     crc = jl_crc16(bytes([key >> 16 & 0xff, key >> 24 & 0xff]), crc)
 
@@ -23,6 +23,16 @@ def jl_cryptcrc(data, key=0xffffffff):
         data[i] ^= crc & 0xff
 
     return bytes(data)
+
+def jl_crypt_rxgp(data):
+    data = bytearray(data)
+    aboba = 0x70477852 # 'pGxR'
+
+    for i in range(len(data)):
+        aboba = (aboba * 16807) + (aboba // 127773) * -0x7fffffff
+        data[i] ^= aboba & 0xff
+
+    return data
 
 #------------------------------------------------
 

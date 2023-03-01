@@ -39,10 +39,10 @@ for pos in range(encstart, encend, 32):
     abspos = (pos - encstart)
 
     if srckey >= 0x0000:
-        chunk = jl_crypt(chunk, (srckey ^ (abspos >> 2)) & 0xffff)
+        chunk = jl_crypt_enc(chunk, (srckey ^ (abspos >> 2)) & 0xffff)
 
     if dstkey >= 0x0000:
-        chunk = jl_crypt(chunk, (dstkey ^ (abspos >> 2)) & 0xffff)
+        chunk = jl_crypt_enc(chunk, (dstkey ^ (abspos >> 2)) & 0xffff)
 
     data[pos:pos+mxlen] = chunk
 
