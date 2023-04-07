@@ -2,5 +2,11 @@ __pycache__
 *.pyc
 
 *.bin
-*.bfu
+
 *.jlx
+
+*.bfu
+*.fw
+*.ufw
+
+*.apu
