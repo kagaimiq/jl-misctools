@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
 			for (int i = 0; i < sydhead->file_count; i++) {
 				if (flags & 1) jl_crypt(&sydentry[i], sizeof(struct jl_syd_entry), cryptkey);
 
-				printf("=> `%-15s`: #%d - type:%02x, @%08x, size: %d, crc: %04x\n", 
+				printf("=> `%-16.16s`: #%d - type:%02x, @%08x, size: %d, crc: %04x\n", 
 				sydentry[i].name, sydentry[i].num, sydentry[i].file_type, sydentry[i].addr, sydentry[i].size, sydentry[i].crc16);
 
 				if ((sydentry[i].addr + sydentry[i].size) >= sydsize) {
@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
 					printf("Warning: this file has invalid crc! This file may be corrupted.\n");
 
 				// write out this file
-				sprintf(dirpaths, "%s%s", dirpath, sydentry[i].name);
+				sprintf(dirpaths, "%s%.16s", dirpath, sydentry[i].name);
 				sydfp = fopen(dirpaths, "wb");
 				if (!sydfp) {
 					fprintf(stderr, "Error: could not open `%s` for writing! errno: %d\n", dirpaths, errno);
@@ -286,7 +286,7 @@ int main(int argc, char **argv) {
 			sydentry[i].num = i;
 			strcpy(sydentry[i].name, basename(sargv[1 + i*2]));
 
-			printf("=> `%-15s`: #%d - type:%02x, @%08x, size: %d, crc: %04x\n", 
+			printf("=> `%-16.16s`: #%d - type:%02x, @%08x, size: %d, crc: %04x\n", 
 				sydentry[i].name, sydentry[i].num, sydentry[i].file_type, sydentry[i].addr, sydentry[i].size, sydentry[i].crc16);
 
 			if (flags & 1) jl_crypt(&sydentry[i], sizeof(struct jl_syd_entry), cryptkey);
@@ -310,12 +310,12 @@ int main(int argc, char **argv) {
 			free(sydhead);
 			return errno;
 		}
-		
+
 		if (flags & 2) {
 			jl_crypt_dyn(sydptr, sydsize, cryptkey,  flags&4 ? 0       : hdrsize);
 			jl_crypt_dyn(sydhead, hdrsize, cryptkey, flags&4 ? sydsize : 0      );
 		}
-		
+
 		if (flags & 4) {
 			fwrite(sydptr, 1, sydsize, sydfp);
 			fwrite(sydhead, 1, hdrsize, sydfp);
@@ -323,9 +323,9 @@ int main(int argc, char **argv) {
 			fwrite(sydhead, 1, hdrsize, sydfp);
 			fwrite(sydptr, 1, sydsize, sydfp);
 		}
-		
+
 		fclose(sydfp);
-		
+
 		free(sydptr);
 		free(sydhead);
 	}
