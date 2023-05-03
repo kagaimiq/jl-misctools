@@ -18,10 +18,14 @@ import struct, argparse, os
 
 ap = argparse.ArgumentParser(description='Jieli UpDate FIRmware / BFU file generator')
 
-ap.add_argument('--load-addr', default='0',
+def anyint(s):
+    return int(s, 0)
+
+
+ap.add_argument('--load-addr', default=0, type=anyint,
                 help='Value of the loader address field')
 
-ap.add_argument('--run-addr', default='0',
+ap.add_argument('--run-addr', default=0, type=anyint,
                 help='Value of the run address field')
 
 ap.add_argument('--name',
@@ -51,7 +55,7 @@ with open(args.output, 'wb') as f:
     hdr = struct.pack('>IIIII',
                         dataoff, len(idata),
                         jl_crc16(idata),
-                        int(args.load_addr, 0), int(args.run_addr, 0)
+                        args.load_addr, args.run_addr
     )
 
     hdr += bytes(name, 'utf-8')

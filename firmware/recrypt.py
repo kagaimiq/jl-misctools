@@ -3,46 +3,43 @@ import argparse
 
 ap = argparse.ArgumentParser(description='JieLi SFC data recryptor')
 
+def anyint(s):
+    return int(s, 0)
+
 ap.add_argument('input',
                 help='Input file')
 
 ap.add_argument('output',
                 help='Output file')
 
-ap.add_argument('srckey',
+ap.add_argument('srckey', type=anyint,
                 help="Input file's key (e.g. 0xffff), anything less than zero means no decryption is done")
 
-ap.add_argument('dstkey',
+ap.add_argument('dstkey', type=anyint,
                 help="Output file's key (e.g. your chip's chipkey), anything less than zero means no encryption is done")
 
-ap.add_argument('start',
+ap.add_argument('start', type=anyint,
                 help="Encrypted data start (i.e. start of the app_dir_head, user.app, etc)")
 
-ap.add_argument('end',
+ap.add_argument('end', type=anyint,
                 help="Encrypted data end (i.e. end of the encrypted blob)")
 
 args = ap.parse_args()
 
-srckey   = int(args.srckey, 0)
-dstkey   = int(args.dstkey, 0)
-encstart = int(args.start,  0)
-encend   = int(args.end,    0)
-
-
 with open(args.input, 'rb') as f:
     data = bytearray(f.read())
 
-for pos in range(encstart, encend, 32):
-    mxlen = min(32, encend - pos)
+for pos in range(args.start, args.end, 32):
+    mxlen = min(32, args.end - pos)
     chunk = data[pos:pos+mxlen]
 
-    abspos = (pos - encstart)
+    abspos = (pos - args.start)
 
-    if srckey >= 0x0000:
-        chunk = jl_crypt_enc(chunk, (srckey ^ (abspos >> 2)) & 0xffff)
+    if not (args.srckey < 0):
+        chunk = jl_crypt_enc(chunk, (args.srckey ^ (abspos >> 2)) & 0xffff)
 
-    if dstkey >= 0x0000:
-        chunk = jl_crypt_enc(chunk, (dstkey ^ (abspos >> 2)) & 0xffff)
+    if not (args.dstkey < 0):
+        chunk = jl_crypt_enc(chunk, (args.dstkey ^ (abspos >> 2)) & 0xffff)
 
     data[pos:pos+mxlen] = chunk
 

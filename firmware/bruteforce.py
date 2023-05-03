@@ -4,9 +4,6 @@ import argparse
 ap = argparse.ArgumentParser(description='JieLi chipkey (SFCENC key) bruteforce',
                              epilog='We still can guess it no matter what!!')
 
-ap.add_argument('--brutelen', default='32',
-                help='Size of a chunk to bruteforce (default: %(default)s)')
-
 ap.add_argument('reference',
                 help='Reference file (e.g. sdram.app, sdk.app, app.bin, etc)')
 

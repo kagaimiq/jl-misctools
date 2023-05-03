@@ -1,14 +1,17 @@
 from jl_stuff import *
 import argparse
 
-ap = argparse.ArgumentParser(description='JLX cryptoz',
-                             epilog='Do not abuse this!!! Only I can!')
+ap = argparse.ArgumentParser(description='JLX cryptoz for specifiles of XYZ',
+                             epilog='Do not use this to encrypt your specifiles. Only I am allowed to do that!')
 
-ap.add_argument('--key', default='0xffff',
-                help='Encryption key (default: %(default)s)')
+def anyint(s):
+    return int(s, 0)
 
-ap.add_argument('--block', default='32',
-                help='Block size (default: %(default)s bytes)')
+ap.add_argument('--key', default=0xffff, type=anyint,
+                help='Encryption key (default: 0x%(default)x)')
+
+ap.add_argument('--block', default=32, type=anyint,
+                help='Block size (default: %(default)d bytes)')
 
 ap.add_argument('input',
                 help='Input file')
@@ -18,15 +21,12 @@ ap.add_argument('output',
 
 args = ap.parse_args()
 
-key = int(args.key, 0)
-blklen = int(args.block, 0)
-
 with open(args.output, 'wb') as outf:
     with open(args.input, 'rb') as inpf:
         addr = 0
 
         while True:
-            blk = inpf.read(blklen)
+            blk = inpf.read(args.block)
             if blk == b'': break
-            addr += outf.write(jl_crypt_enc(blk, (key ^ (addr >> 2)) & 0xffff))
+            addr += outf.write(jl_crypt_enc(blk, (args.key ^ (addr >> 2)) & 0xffff))
 
