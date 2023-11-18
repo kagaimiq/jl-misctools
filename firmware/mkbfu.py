@@ -22,11 +22,11 @@ def anyint(s):
     return int(s, 0)
 
 
-ap.add_argument('--load-addr', default=0, type=anyint,
-                help='Value of the loader address field')
+ap.add_argument('--load-addr', default=0, type=anyint, metavar='ADDR',
+                help='Value of the "loader address" field')
 
-ap.add_argument('--run-addr', default=0, type=anyint,
-                help='Value of the run address field')
+ap.add_argument('--run-addr', default=0, type=anyint, metavar='ADDR',
+                help='Value of the "run address" field')
 
 ap.add_argument('--name',
                 help='File name specified in the BFU file (uses uppercase input file name if not specified)')
