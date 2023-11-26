@@ -1,18 +1,5 @@
+from jl_stuff import *
 import argparse, struct
-import crcmod
-
-########################################
-
-jl_crc16 = crcmod.mkCrcFun(0x11021, rev=False, initCrc=0x0000, xorOut=0x0000)
-
-def jl_crypt_enc(data, key=0xffff):
-    data = bytearray(data)
-
-    for i in range(len(data)):
-        data[i] ^= key & 0xff
-        key = ((key << 1) ^ (0x1021 if (key >> 15) else 0)) & 0xffff
-
-    return bytes(data)
 
 ########################################
 
@@ -76,7 +63,7 @@ with args.output as of:
     with args.input as f:
         data = f.read()
 
-    hdr = struct.pack('<HHIIH',
+    bhdr = struct.pack('<HHIIH',
         # bank count
         1,
         # bank size
@@ -88,15 +75,15 @@ with args.output as of:
         # data CRC16
         jl_crc16(data)
     )
-    hdr = struct.pack('<14sH', hdr, jl_crc16(hdr))
+    bhdr = struct.pack('<14sH', bhdr, jl_crc16(bhdr))
 
     fhdr = struct.pack('<HIIBBH16s',
         # data CRC16
-        jl_crc16(hdr+data),
+        jl_crc16(bhdr+data),
         # data offset
         0x40,
         # data length
-        len(hdr+data),
+        len(bhdr+data),
         # attributes
         0x00,
         # <reserved>
@@ -110,5 +97,5 @@ with args.output as of:
 
     of.write(jl_crypt_enc(fhdr))
 
-    of.write(jl_crypt_enc(hdr))
+    of.write(jl_crypt_enc(bhdr))
     of.write(jl_crypt_enc(data))
