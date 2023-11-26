@@ -1,8 +1,8 @@
 # JieLi Misc tools
 
-Some misc tools and stuff for JieLi ...
+Tools and stuff for JieLi stuff.
 
 - [Firmware-related stuff](firmware/)
-- [Key file stuff](keyfile/)
+- [Key file tools](keyfile/)
 - [Old generation stuff](oldgen/)
 - [UI Resource stuff](ui_resource/)
