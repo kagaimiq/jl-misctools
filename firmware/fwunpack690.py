@@ -4,12 +4,6 @@ import yaml
 
 ap = argparse.ArgumentParser(description='BR17 firmware unpacker')
 
-def anyint(s):
-    return int(s, 0)
-
-ap.add_argument('--chipkey', type=anyint, metavar='KEY',
-                help='The chip key that is used to encrypt the firmware (default is taken from fw itself)')
-
 ap.add_argument('file', nargs='+',
                 help='Input firmware file(s)')
 
@@ -24,18 +18,18 @@ def nullterm(data):
 
 ###################################################################################################
 
-class SydFile:
-    def __init__(self, sydfs, info):
+class SYDFile:
+    def __init__(self, sydfs, _type, _crc16, _offset, _size, _number, _name:str):
         self.sydfs = sydfs
 
-        self.type = info['type']
-        self.crc16 = info['crc16']
-        self.offset = info['offset']
-        self.size = info['length']
-        self.number = info['number']
-        self.name = str(info['name'])
+        self.type   = _type
+        self.crc16  = _crc16
+        self.offset = _offset
+        self.size   = _size
+        self.number = _number
+        self.name   = _name
 
-        self.absoffset = self.offset + sydfs.flashbase
+        self.absoffset = self.offset + sydfs.flash_base
 
     def read(self, addr, size):
         if addr > self.size:
@@ -49,11 +43,11 @@ class SydFile:
                 (self.name, self.size, self.offset, self.crc16, self.type, self.number)
 
 
-class SydReader:
+class SYDReader:
     def __init__(self, flash, flashbase=0, headerbase=0, encrypted=True, size=None, headerless=False):
         self.flash = flash
-        self.flashbase = flashbase
-        self.headerbase = flashbase + headerbase
+        self.flash_base = flashbase
+        self.header_base = flashbase + headerbase
         self.encrypted = encrypted
     
         #-----------------------------------------------------------------------------------#
@@ -62,27 +56,27 @@ class SydReader:
             if size is None:
                 raise TypeError('The size should be specified for a headerless syd.')
 
-            self.listbase = self.headerbase
+            self.list_base = self.header_base
 
-            nfiles = 0
+            self.filelist = []
 
             for off in range(0, size, 32):
-                entry = flash.read(self.listbase + off, 32)
+                entry = flash.read(self.list_base + off, 32)
 
                 # TODO, proper sanity check
                 if entry[1] != 0x00:
                     break
 
-                nfiles += 1
+                self.filelist.append(entry)
 
-            self.filecount = nfiles
+            self.file_count = len(self.filelist)
 
         else:
-            fhead = flash.read(self.headerbase, 32)
+            fhead = flash.read(self.header_base, 32)
             if encrypted: fhead = jl_crypt_enc(fhead)
             fhcrc, fhead = struct.unpack('<H30s', fhead)
 
-            self.listbase = self.headerbase + 32
+            self.list_base = self.header_base + 32
 
             if jl_crc16(fhead) != fhcrc:
                 raise Exception('Flash header CRC mismatch')
@@ -95,43 +89,44 @@ class SydReader:
             if fnum > 1024:
                 raise Exception('Too ambigous file count')
 
-            self.filecount = fnum
-            self.info = {'info': (finfo1, finfo2), 'version': (fver, fver1), 'chiptype': fctype}
+            self.file_count = fnum
 
-            flcrc_calc = 0
+            self.h_info     = (finfo1, finfo2)
+            self.h_version  = (fver, fver1)
+            self.h_chiptype = fctype
 
-            for i in range(self.filecount):
-                entry = flash.read(self.listbase + 32 * i, 32)
-                flcrc_calc = jl_crc16(entry, flcrc_calc)
+            flist = flash.read(self.list_base, self.file_count * 32)
 
-            if flcrc_calc != flcrc:
+            if jl_crc16(flist) != flcrc:
                 raise Exception('File list CRC mismatch')
 
-    def get_file_hdr(self, fid):
-        if fid < 0 or fid >= self.filecount:
+            self.filelist = []
+            for i in range(self.file_count):
+                entry = flist[i * 32 : i * 32 + 32]
+                if encrypted: entry = jl_crypt_enc(entry)
+                self.filelist.append(entry)
+
+    #-------------------------------------------------#
+
+    def get_file_by_id(self, fid):
+        if fid < 0 or fid >= self.file_count:
             raise IndexError('File ID out of bounds')
 
-        entry = self.flash.read(self.listbase + 32 * fid, 32)
-        if self.encrypted: entry = jl_crypt_enc(entry)
+        #entry = self.flash.read(self.list_base + 32 * fid, 32)
+        #if self.encrypted: entry = jl_crypt_enc(entry)
 
-        etype, eres, ecrc16, eoff, elen, enum, ename = struct.unpack('<BBHIII16s', entry)
+        etype, eres, ecrc16, eoff, elen, enum, ename = struct.unpack('<BBHIII16s', self.filelist[fid])
 
         ename = str(nullterm(ename), 'ascii')
 
-        info = {
-            'type': etype,
-            'reserved': eres,
-            'crc16': ecrc16,
-            'offset': eoff,
-            'length': elen,
-            'number': enum,
-            'name': ename
-        }
-
-        return info
-
-    def get_file_by_id(self, fid):
-        return SydFile(self, self.get_file_hdr(fid))
+        return SYDFile(self,
+            _type     = etype,
+            _crc16    = ecrc16,
+            _offset   = eoff,
+            _size     = elen,
+            _number   = enum,
+            _name     = ename
+        )
 
 ####################################################################
 
@@ -143,9 +138,9 @@ class FlashFile:
         if size is not None:
             self.size = size
         else:
-            oldpos = f.tell()
-            self.size = f.seek(0, 2) - self.offset
-            f.seek(oldpos)
+            oldpos = file.tell()
+            self.size = file.seek(0, 2) - self.offset
+            file.seek(oldpos)
 
     def read(self, addr, size):
         #if addr >= self.size:
@@ -157,7 +152,7 @@ class FlashFile:
         self.file.seek(self.offset + addr)
         return self.file.read(size)
 
-class SFC:
+class SFCMap:
     def __init__(self, flash, base, key):
         self.flash = flash
         self.base = base
@@ -169,51 +164,29 @@ class SFC:
         self.size = flash.size - base
 
     def read(self, addr, size):
-        if False:
-            data = b''
+        data = bytearray(self.flash.read(self.base + addr, size))
 
-            while len(data) < size:
-                baddr = addr & ~31
-                boff = addr & 31
+        pos = 0
+        while pos < size:
+            caddr = addr + pos
+            baddr = caddr & ~31
+            boff = caddr & 31
+            brem = 32 - boff
 
-                remsize = min(32, size - len(data))
-                blksize = remsize + boff
+            key = (self.key ^ (baddr >> 2)) & 0xffff
 
-                block = self.flash.read(self.base + baddr, blksize)
+            block = data[pos:pos+brem]
 
-                if len(block) < blksize:
-                    break
+            if boff > 0:
+                block = jl_crypt_enc(bytes(boff) + block, key)[boff:]
+            else:
+                block = jl_crypt_enc(block, key)
 
-                block = jl_crypt_enc(block, (self.key ^ (baddr >> 2)) & 0xffff)
+            data[pos:pos+brem] = block
 
-                data += block[boff:][:remsize]
-                addr += remsize
+            pos += brem
 
-            return data
-        else:
-            data = bytearray(self.flash.read(self.base + addr, size))
-
-            pos = 0
-            while pos < size:
-                caddr = addr + pos
-                baddr = caddr & ~31
-                boff = caddr & 31
-                brem = 32 - boff
-
-                key = (self.key ^ (baddr >> 2)) & 0xffff
-
-                block = data[pos:pos+brem]
-
-                if boff > 0:
-                    block = jl_crypt_enc(bytes(boff) + block, key)[boff:]
-                else:
-                    block = jl_crypt_enc(block, key)
-
-                data[pos:pos+brem] = block
-
-                pos += brem
-
-            return bytes(data)
+        return bytes(data)
 
 ###################################################################################################
 
@@ -267,6 +240,47 @@ def chipkeyfile_decode(ent):
 
 
 
+def bankcb_decrypt(data, key=0xffff):
+    data = bytearray(data)
+
+    def derange(off, len):
+        de = jl_crypt_enc(data[off:off+len], key=key)
+        data[off:off+len] = de
+        return de
+
+    base = 0
+
+    while base < len(data):
+        print('=== bankcb @ %x' % base)
+
+        i = 0
+        banks = 1
+        maxend = 0
+
+        while i < banks:
+            bhdr, bhcrc = struct.unpack('<14sH', derange(base + i*16, 16))
+            if jl_crc16(bhdr) != bhcrc:
+                raise Exception('CRC mismatch for a bank %d header at %x' % (i, base))
+
+            bnum, bsize, bload, boff, bcrc = struct.unpack('<HHIIH', bhdr)
+            print('  #%d (%d) @=>%x @%x - %04x / %04x' % (bnum, bsize, bload, boff, bcrc, bhcrc))
+
+            maxend = max(maxend, boff + bsize)
+
+            if i == 0: banks = bnum
+
+            bdata = derange(base + boff, bsize)
+            if jl_crc16(bdata) != bcrc:
+                raise Exception('CRC mismatch for a bank %d data to be loaded at %x, at %x' % (i, bload, base))
+
+            i += 1
+
+        base += maxend
+
+    return bytes(data)
+
+###################################################################################################
+
 def parsefw(fwfile, outdir):
     flash = FlashFile(fwfile)
 
@@ -290,7 +304,7 @@ def parsefw(fwfile, outdir):
 
         if fw_pdc is None:
             if block.startswith(b'pdc:'):
-                fw_pdc = str(nullterm(block[4:]), 'ascii')
+                fw_pdc = block[4:]
                 print('--- PDC-> [%s]' % fw_pdc)
 
         elif fw_pdn is None:
@@ -308,24 +322,23 @@ def parsefw(fwfile, outdir):
     #
     # scan the syd for the important firmware parts
     #
-    mainsyd = SydReader(flash)
+    fwsyd = SYDReader(flash)
 
-    for n in range(mainsyd.filecount):
-        ent = mainsyd.get_file_by_id(n)
+    for n in range(fwsyd.file_count):
+        ent = fwsyd.get_file_by_id(n)
+
+        print(ent)
 
         if ent.name == 'uboot.boot':
             f_uboot = ent
 
-        elif ent.name == 'user.app':
-            if f_userapp is not None:
-                print(ent, f_userapp)
-
-            f_userapp = ent
+        #elif ent.name == 'user.app':
+        #    f_userapp = ent
 
         elif ent.name == '_____.____2':
-            info2syd = SydReader(flash, headerbase=ent.absoffset, encrypted=False, size=ent.size, headerless=True)
+            info2syd = SYDReader(flash, headerbase=ent.absoffset, encrypted=False, size=ent.size, headerless=True)
 
-            for m in range(info2syd.filecount):
+            for m in range(info2syd.file_count):
                 ent = info2syd.get_file_by_id(m)
 
                 if ent.name == 'ver.bin':
@@ -355,13 +368,13 @@ def parsefw(fwfile, outdir):
     #
     # kind of a sanity check
     #
-    if f_uboot is None:
+    if f_uboot is None:     # second-stage bootloader should always exist
         raise Exception('Missing uboot.boot!')
 
-    if f_userapp is None:
+    if f_userapp is None:   # this is the main application
         raise Exception('Missing user.app!')
 
-    if f_syscfg is None:
+    if f_syscfg is None:    # there is, among other things, the offset of the syd header within user.app
         raise Exception('Missing sys.cfg!')
 
     if f_spcaer is None:
@@ -378,7 +391,7 @@ def parsefw(fwfile, outdir):
     yamlpath = outdir/'jlfirmware.yaml'
 
     fwinfo = {
-        'pdc': fw_pdc,
+        'pdc': fw_pdc.hex(),
         'pdn': fw_pdn
     }
 
@@ -390,102 +403,71 @@ def parsefw(fwfile, outdir):
 
     #====================================================================#
 
-    spcareas = None
-
-    if f_spcaer is not None:
-        ent = f_spcaer
-
-        print('---- Special Area ----')
-
-        spcareas = []
-
-        for off in range(0, ent.size, 16):
-            area = ent.read(off, 16)
-            if len(area) < 16: break
-
-            ainfo, acrc = struct.unpack('<14sH', area)
-
-            if jl_crc16(ainfo) != acrc:
-                break
-
-            aname, apos, asize, axx1, axx2 = struct.unpack('<4sIIBB', ainfo)
-
-            aname = str(aname, 'ascii')
-
-            print('%s - @%08x (%d) - %02x %02x' % (aname, apos, asize, axx1, axx2))
-            spcareas.append({'name': aname, 'pos': apos, 'size': asize, 'xx1': axx1, 'xx2': axx2})
-
-            if apos == 0x444E4546:  # "FEND"
-                print('   *** somewhere at flash end? ***')
-            elif apos < flash.size:
-                hexdump(flash.read(apos, 64))
-            else:
-                print('   *** address out of bounds ***')
+    ubootfile = outdir/f_uboot.name
+    ubootfile.write_bytes(bankcb_decrypt(f_uboot.read(0, f_uboot.size)))
+    fwinfo['uboot_boot'] = str(ubootfile.relative_to(yamlpath.parent))
 
     #====================================================================#
 
-    if f_uboot is not None:
-        ubootfile = outdir/f_uboot.name
-        ubootfile.write_bytes(f_uboot.read(0, f_uboot.size))
-        fwinfo['spl-file'] = str(ubootfile.relative_to(yamlpath.parent))
-
-    if f_verbin is not None:
+    if f_verbin is not None and f_verbin.size > 0:
         verfile = outdir/f_verbin.name
         verfile.write_bytes(f_verbin.read(0, f_verbin.size))
-        fwinfo['version-info'] = str(verfile.relative_to(yamlpath.parent))
+        fwinfo['version_info'] = str(verfile.relative_to(yamlpath.parent))
 
-    if spcareas is not None:
-        fwinfo['special-areas'] = {}
-
-        for area in spcareas:
-            info = {
-                'address': area['pos'],
-                'size': area['size'],
-                'arg1': area['xx1'],
-                'arg2': area['xx2']
-            }
-
-            fwinfo['special-areas'][area['name']] = info
+    #====================================================================#
 
     #
     # parse user.app!
     #
     try:
-        if args.chipkey is None:
-            if f_chipkey is None:
-                raise Exception('The chipkey.bin file is absent!')
-
-            chipkey = chipkeyfile_decode(f_chipkey)
-            fwinfo['chipkey'] = chipkey
-        else:
-            chipkey = args.chipkey
+        chipkey = chipkeyfile_decode(f_chipkey)
 
         print('Using chipkey: %04x' % chipkey)
+        fwinfo['chipkey'] = chipkey
 
         # SFC is mapped at the beginning of user.app
-        sfc = SFC(flash, f_userapp.absoffset, chipkey)
+        sfc = SFCMap(flash, f_userapp.absoffset, chipkey)
 
-        (outdir/'user.app').write_bytes(sfc.read(0, f_userapp.size))
+        #(outdir/'user.app').write_bytes(sfc.read(0, f_userapp.size))
 
-        # grab the sys.cfg via SFC as it is encrypted alongside user.app!
+        # grab the sys.cfg via SFC as it is encrypted alongside with user.app!
         syscfg = sfc.read(f_syscfg.offset - f_userapp.offset, f_syscfg.size)
 
         if jl_crc16(syscfg) != f_syscfg.crc16:
             print('Syscfg CRC mismatch')
             return
 
-        (outdir/'sys.cfg').write_bytes(syscfg)
-
         print('######### sys.cfg:')
         hexdump(syscfg)
 
-        fi_flashcfg = {}
-        fi_clkcfg = {}
-
-        fwinfo['sys-cfg'] = {
-            'flash-cfg': fi_flashcfg,
-            'clk-config': fi_clkcfg,
-        }
+        '''
+        sys.cfg layout:
+        [0-9]: flash config
+            [ 0]: flash_id
+            [ 1]: flash_size
+            [ 2]: flash_file_size
+            [ 3]: sdfile_head_addr
+            [ 4]: spi_run_mode
+                        [1:0]: SPI_DATA_WIDTH: 0=1-wire SPI, 1=2-wire SPI, 2=DSPI, 3=QSPI
+                        [ 2 ]: SPI_IS_CONTINUE_READ
+                        [ 3 ]: SPI_IS_OUTPUT
+                        [ 4 ]: SPI_NWIRE_SEND_CMD
+                        [8:5]: SPI_CS_DESELECT
+            [ 5]: spi_div
+            [ 6]: flash_base
+            [ 7]: protected_rag
+            [ 8]: cfg_zone_addr
+            [ 9]: cfg_zone_size
+        [10-14]: clock config
+            [10]: pll_sel
+            [11]: osc_freq
+            [12]: osc_src
+            [13]: osc_hc_en
+            [14]: osc_1pin_en
+        [15-16]: .. something
+            [15]: address
+            [16]: size
+        '''
 
         # Flash config
         flashcfg = struct.unpack_from('<IIIIIIIIII', syscfg, 0)
@@ -501,12 +483,6 @@ def parsefw(fwfile, outdir):
         print('cfg_zone_size    = %d'   % flashcfg[9])
         print()
 
-        fi_flashcfg['flash_id']      = flashcfg[0]
-        fi_flashcfg['flash_size']    = flashcfg[1]
-        fi_flashcfg['spi_run_mode']  = flashcfg[4]
-        fi_flashcfg['spi_div']       = flashcfg[5]
-        fi_flashcfg['protected_arg'] = flashcfg[7]
-
         # Clock config
         clkcfg = struct.unpack_from('<IIIII', syscfg, 10*4)
         print('pll_sel          = %d'   % clkcfg[0])
@@ -516,18 +492,46 @@ def parsefw(fwfile, outdir):
         print('osc_1pin_en      = %d'   % clkcfg[4])
         print()
 
-        fi_clkcfg['pll_sel']     = clkcfg[0]
-        fi_clkcfg['osc_freq']    = clkcfg[1]
-        fi_clkcfg['osc_src']     = clkcfg[2]
-        fi_clkcfg['osc_hc_en']   = clkcfg[3]
-        fi_clkcfg['osc_1pin_en'] = clkcfg[4]
-
         # Whatever
         watcfg = struct.unpack_from('<II', syscfg, 15*4)
         print('rem stuff start  = 0x%x' % watcfg[0])
         print('rem stuff length = 0x%x' % watcfg[1])
         print(' ---> %08x' % (watcfg[0] + watcfg[1]))
         print()
+
+        fwinfo['system_config'] = dict(
+            flash_cfg = dict(
+                flash_id         = flashcfg[0],
+                flash_size       = flashcfg[1],
+                flash_file_size  = flashcfg[2],
+                sdfile_head_addr = flashcfg[3],
+                #spi_run_mode = dict(
+                #    spi_data_width       = (flashcfg[4] >> 0) & 3,
+                #    spi_is_continue_read = (flashcfg[4] >> 2) & 1,
+                #    spi_is_output        = (flashcfg[4] >> 3) & 1,
+                #    spi_nwire_send_cmd   = (flashcfg[4] >> 4) & 1,
+                #    spi_cs_deselect      = (flashcfg[4] >> 5) & 0xf,
+                #    __remainder__ = flashcfg[4] >> 9
+                #),
+                spi_run_mode  = flashcfg[4],
+                spi_div       = flashcfg[5],
+                flash_base    = flashcfg[6],
+                protected_arg = flashcfg[7],
+                cfg_zone_addr = flashcfg[8],
+                cfg_zone_size = flashcfg[9],
+            ),
+            clock_cfg = dict(
+                pll_sel     = clkcfg[0],
+                osc_freq    = clkcfg[1],
+                osc_src     = clkcfg[2],
+                osc_hc_en   = clkcfg[3],
+                osc_1pin_en = clkcfg[4], 
+            ),
+            what_cfg = dict(
+                start  = watcfg[0],
+                length = watcfg[1],
+            )
+        )
 
         print('cfg zone:')
         hexdump(flash.read(flashcfg[8] + flashcfg[6], flashcfg[9]))
@@ -538,15 +542,15 @@ def parsefw(fwfile, outdir):
         # finally extract data from the user.app, whose syd header starts with offset specified in sys.cfg
         #
 
-        fwsyd = SydReader(sfc, headerbase=flashcfg[3], encrypted=False)
+        appsyd = SYDReader(sfc, headerbase=flashcfg[3], encrypted=False)
 
         appdatadir = outdir/'app-data'
         appdatadir.mkdir(exist_ok=True)
 
-        fwinfo['app-files'] = []
+        fwinfo['app_files'] = []
 
-        for mm in range(fwsyd.filecount):
-            ent = fwsyd.get_file_by_id(mm)
+        for mm in range(appsyd.file_count):
+            ent = appsyd.get_file_by_id(mm)
 
             print(ent)
             hexdump(ent.read(0, 0x40))
@@ -558,7 +562,7 @@ def parsefw(fwfile, outdir):
             outfile = appdatadir/ent.name
             outfile.write_bytes(data)
 
-            fwinfo['app-files'].append(str(outfile.relative_to(yamlpath.parent)))
+            fwinfo['app_files'].append(str(outfile.relative_to(yamlpath.parent)))
 
     except Exception as e:
         print('<!> Failed to parse user app:', e)
@@ -568,6 +572,7 @@ def parsefw(fwfile, outdir):
     #
     with open(yamlpath, 'w') as f:
         yaml.dump(fwyaml, f)
+
 
 
 for fwfile in args.file:
