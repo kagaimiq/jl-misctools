@@ -2,12 +2,22 @@ from jltech.crc import jl_crc16
 from jltech.cipher import jl_enc_cipher, cipher_bytes
 from jltech.chipkeybin import chipkeybin_decode
 from jltech.utils import hexdump, nulltermstr
-import argparse, struct, pathlib
+
+from pathlib import Path
+
+import argparse
+import struct
 import yaml
+
+###################################################################################################
 
 ap = argparse.ArgumentParser(description='BR17 firmware unpacker')
 
-ap.add_argument('file', nargs='+',
+ap.add_argument('--format', default='{fpath}_unpack',
+                help='Unpack directory name template, default: "%(default)s".'
+                     ' ({fpath} refers to the full file path, {fdir} refers to the directory name the file resides in, {fname} refers to the file name)')
+
+ap.add_argument('file', type=Path, nargs='+',
                 help='Input firmware file(s)')
 
 args = ap.parse_args()
@@ -247,7 +257,7 @@ def bankcb_decrypt(data, key=0xffff):
 
 ###################################################################################################
 
-def parsefw(fwfile, outdir):
+def parsefw(fwfile, outdir:Path):
     flash = FlashFile(fwfile)
 
     #====================================================================#
@@ -351,7 +361,6 @@ def parsefw(fwfile, outdir):
 
     #====================================================================#
 
-    outdir = pathlib.Path(outdir)
     outdir.mkdir(exist_ok=True)
 
     yamlpath = outdir/'jlfirmware.yaml'
@@ -539,14 +548,16 @@ def parsefw(fwfile, outdir):
     with open(yamlpath, 'w') as f:
         yaml.dump(fwyaml, f)
 
+###################################################################################################
 
-
-for fwfile in args.file:
-    print('\x1b[1;35m#\n# %s\n#\x1b[0m\n' % fwfile)
+for fpath in args.file:
+    print(f'#\n# {fpath}\n#\n')
 
     try:
-        with open(fwfile, 'rb') as f:
-            parsefw(f, fwfile + '_unpack')
+        with open(fpath, 'rb') as f:
+            parsefw(f,
+                Path(args.format.format(fpath=fpath, fname=fpath.name, fdir=fpath.parent))
+            )
 
     except Exception as e:
         print('[!] Failed:', e)
