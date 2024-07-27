@@ -1,4 +1,4 @@
-from jl_stuff import *
+from jltech.crc import jl_crc16
 import argparse, struct, pathlib
 import yaml
 
@@ -40,6 +40,10 @@ def toneidx_make(names, idxbase=1):
     return thdr + tlist
 
 ###################################################################################################
+
+# TODO: reuse the jlfs maker from mkjlfs.py or simply abandon this thing
+# in favor of mkjlfs.py + this thing just making the tone.idx file.
+# or do something better like automatic format conversion etc.
 
 class Sydv2maker:
     def __init__(self, max_size=0xffffffff, alignment=16):

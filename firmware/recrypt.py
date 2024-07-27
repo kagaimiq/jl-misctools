@@ -1,10 +1,10 @@
-from jl_stuff import *
+from jltech.cipher import jl_enc_cipher
+from jltech.utils import anyint
 import argparse
 
-ap = argparse.ArgumentParser(description='JieLi SFC data recryptor')
+###############################################################################
 
-def anyint(s):
-    return int(s, 0)
+ap = argparse.ArgumentParser(description='JieLi SFC data [en/re/de]cipherer')
 
 ap.add_argument('input',
                 help='Input file')
@@ -22,26 +22,21 @@ ap.add_argument('start', type=anyint,
                 help="Encrypted data start (i.e. start of the app_dir_head, user.app, etc)")
 
 ap.add_argument('end', type=anyint,
-                help="Encrypted data end (i.e. end of the encrypted blob)")
+                help="Encrypted data end (i.e. end of the encrypted blob), note that this is *inclusive*.")
 
 args = ap.parse_args()
+
+###############################################################################
 
 with open(args.input, 'rb') as f:
     data = bytearray(f.read())
 
-for pos in range(args.start, args.end, 32):
-    mxlen = min(32, args.end - pos)
-    chunk = data[pos:pos+mxlen]
+for off in range(args.start, args.end, 32):
+    size = min(32, args.end - off)
+    adr = (off - args.start) >> 2
 
-    abspos = (pos - args.start)
-
-    if not (args.srckey < 0):
-        chunk = jl_crypt_enc(chunk, (args.srckey ^ (abspos >> 2)) & 0xffff)
-
-    if not (args.dstkey < 0):
-        chunk = jl_crypt_enc(chunk, (args.dstkey ^ (abspos >> 2)) & 0xffff)
-
-    data[pos:pos+mxlen] = chunk
+    if args.srckey >= 0: jl_enc_cipher(data, off, size, args.srckey ^ adr)
+    if args.dstkey >= 0: jl_enc_cipher(data, off, size, args.dstkey ^ adr)
 
 with open(args.output, 'wb') as f:
     f.write(data)

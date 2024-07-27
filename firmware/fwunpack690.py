@@ -1,4 +1,7 @@
-from jl_stuff import *
+from jltech.crc import jl_crc16
+from jltech.cipher import jl_enc_cipher, cipher_bytes
+from jltech.chipkeybin import chipkeybin_decode
+from jltech.utils import hexdump, nulltermstr
 import argparse, struct, pathlib
 import yaml
 
@@ -8,13 +11,6 @@ ap.add_argument('file', nargs='+',
                 help='Input firmware file(s)')
 
 args = ap.parse_args()
-
-###################################################################################################
-
-def nullterm(data):
-    pos = data.find(b'\0')
-    if pos < 0: pos = len(data)
-    return data[:pos]
 
 ###################################################################################################
 
@@ -73,7 +69,7 @@ class SYDReader:
 
         else:
             fhead = flash.read(self.header_base, 32)
-            if encrypted: fhead = jl_crypt_enc(fhead)
+            if encrypted: fhead = cipher_bytes(jl_enc_cipher, fhead)
             fhcrc, fhead = struct.unpack('<H30s', fhead)
 
             self.list_base = self.header_base + 32
@@ -103,7 +99,7 @@ class SYDReader:
             self.filelist = []
             for i in range(self.file_count):
                 entry = flist[i * 32 : i * 32 + 32]
-                if encrypted: entry = jl_crypt_enc(entry)
+                if encrypted: entry = cipher_bytes(jl_enc_cipher, entry)
                 self.filelist.append(entry)
 
     #-------------------------------------------------#
@@ -117,7 +113,8 @@ class SYDReader:
 
         etype, eres, ecrc16, eoff, elen, enum, ename = struct.unpack('<BBHIII16s', self.filelist[fid])
 
-        ename = str(nullterm(ename), 'ascii')
+        # GB2312  because they're chinese, and most importantly they're using windows so UTF-8 is not an option at all.
+        ename = nulltermstr(ename, encoding='gb2312')
 
         return SYDFile(self,
             _type     = etype,
@@ -164,29 +161,15 @@ class SFCMap:
         self.size = flash.size - base
 
     def read(self, addr, size):
-        data = bytearray(self.flash.read(self.base + addr, size))
+        baddr = addr & ~0x1F
+        bsize = addr + size - baddr
 
-        pos = 0
-        while pos < size:
-            caddr = addr + pos
-            baddr = caddr & ~31
-            boff = caddr & 31
-            brem = 32 - boff
+        data = bytearray(self.flash.read(self.base + baddr, bsize))
 
-            key = (self.key ^ (baddr >> 2)) & 0xffff
+        for off in range(0, bsize, 32):
+            jl_enc_cipher(data, off, min(32, bsize - off), self.key ^ ((baddr + off) >> 2))
 
-            block = data[pos:pos+brem]
-
-            if boff > 0:
-                block = jl_crypt_enc(bytes(boff) + block, key)[boff:]
-            else:
-                block = jl_crypt_enc(block, key)
-
-            data[pos:pos+brem] = block
-
-            pos += brem
-
-        return bytes(data)
+        return bytes(data[addr-baddr:])
 
 ###################################################################################################
 
@@ -195,6 +178,7 @@ def chipkeyfile_decode(ent):
 
     ckfile = ent.read(0, ent.size)
 
+    print('(as specified by the file entry)')
     hexdump(ckfile)
 
     if jl_crc16(ckfile) != ent.crc16:
@@ -203,6 +187,7 @@ def chipkeyfile_decode(ent):
     # there are some extra data that goes after this file entry (32 bytes)
     ckfile = ent.sydfs.flash.read(ent.absoffset, 64)
 
+    print('(extra data)')
     hexdump(ckfile)
 
     ckdata, ckcrc = struct.unpack_from('<32sH', ckfile, 0)
@@ -210,27 +195,8 @@ def chipkeyfile_decode(ent):
     if jl_crc16(ckdata) != ckcrc:
         raise Exception('Chipkey file CRC mismatch (from extra data!)')
 
-    cksum = sum(ckdata[:16]) & 0xff
-
-    if cksum >= 0xE0:
-        cksum = 0xAA
-    elif cksum <= 0x10:
-        cksum = 0x55
-
-    key = 0
-
-    for i in range(16):
-        v1 = ckdata[16 + i]
-        v2 = ckdata[15 - i]
-        vxor = v1 ^ v2
-
-        if vxor < cksum:
-            key |= (1 << i)
-
-        # perfect cherry blossom
-        print('%2d [%04x %s %04x]: %02x ^ %02x = %02x - %02x = %02x (%d)' % \
-              (i, 1 << i, ">>" if vxor < cksum else "--", key,
-               v1, v2, vxor, cksum, vxor - cksum, vxor < cksum))
+    # imperishable night
+    key = chipkeybin_decode(ckdata)
 
     print('>>>>> CHIP KEY %04x <<<<<' % key)
 
@@ -244,7 +210,7 @@ def bankcb_decrypt(data, key=0xffff):
     data = bytearray(data)
 
     def derange(off, len):
-        de = jl_crypt_enc(data[off:off+len], key=key)
+        de = cipher_bytes(jl_enc_cipher, data[off:off+len], key=key)
         data[off:off+len] = de
         return de
 
@@ -309,7 +275,7 @@ def parsefw(fwfile, outdir):
 
         elif fw_pdn is None:
             if block.startswith(b'pdn:'):
-                fw_pdn = str(nullterm(block[4:]), 'ascii')
+                fw_pdn = nulltermstr(block[4:], encoding='ascii')
                 print('--- PDN-> [%s]' % fw_pdn)
 
         else:

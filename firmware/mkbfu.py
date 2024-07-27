@@ -1,26 +1,10 @@
-from jl_stuff import *
+from jltech.crc import jl_crc16
+from jltech.utils import align_by, anyint
 import struct, argparse, os
 
-'''
-00.07 = Magic   "JL_UDFIR"
-08.0B = Header size
-0C.0F = Header CRC16
-
---- Header contents start there:
-10.13 = Data offset
-14.17 = Data size
-18.1B = Data CRC16
-1C.1F = Loader address
-20.23 = Run address
-24... = File name
-'''
-
+################################################################################
 
 ap = argparse.ArgumentParser(description='Jieli UpDate FIRmware / BFU file generator')
-
-def anyint(s):
-    return int(s, 0)
-
 
 ap.add_argument('--load-addr', default=0, type=anyint, metavar='ADDR',
                 help='Value of the "loader address" field')
@@ -39,10 +23,26 @@ ap.add_argument('output',
 
 args = ap.parse_args()
 
+################################################################################
+
+
+''' BFU format:
+
+00.07 = Magic   "JL_UDFIR"
+08.0B = Header size
+0C.0F = Header CRC16
+
+--- Header contents start there:
+10.13 = Data offset
+14.17 = Data size
+18.1B = Data CRC16
+1C.1F = Loader address
+20.23 = Run address
+24... = File name
+'''
 
 with open(args.input, 'rb') as f:
     idata = f.read()
-
 
 with open(args.output, 'wb') as f:
     dataoff = 0x200 # TODO
@@ -58,8 +58,8 @@ with open(args.output, 'wb') as f:
                         args.load_addr, args.run_addr
     )
 
-    hdr += bytes(name, 'utf-8')
-    hdr += bytes(((len(hdr) + 15) & ~15) - len(hdr))
+    hdr += name.encode()
+    hdr += bytes(align_by(len(hdr), 16))
 
     f.write(struct.pack('>8sII', b'JL_UDFIR', len(hdr), jl_crc16(hdr)))
     f.write(hdr)

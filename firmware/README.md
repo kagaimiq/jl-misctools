@@ -1,6 +1,6 @@
-# Firmware tools
+# Firmware & co. tools
 
-This directory contains firmware-related stuff, which maybe is going to be spun off as a separate project ("jl-fwtools", perhaps?)
+This directory contains firmware-related stuff, which maybe is going to be spun off as a separate project ("jl-fwtools", perhaps? or just "jl-tools" for that matter.)
 
 ## fwunpack690.py
 

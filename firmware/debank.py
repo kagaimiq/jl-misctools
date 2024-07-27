@@ -1,4 +1,5 @@
-from jl_stuff import *
+from jltech.cipher import jl_enc_cipher, cipher_bytes
+from jltech.crc import jl_crc16
 import struct, argparse
 from pathlib import Path
 
@@ -33,7 +34,7 @@ with open(args.file, 'rb') as f:
         f.seek(bcoffset + off)
         data = f.read(size)
         if key is not None:
-            data = jl_crypt_enc(data, key=key)
+            data = cipher_bytes(jl_enc_cipher, data, key=key)
         return data
 
     ######################################

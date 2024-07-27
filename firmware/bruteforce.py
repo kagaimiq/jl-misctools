@@ -1,5 +1,7 @@
-from jl_stuff import *
+from jltech.cipher import jl_enc_cipher, cipher_bytes
 import argparse
+
+################################################################################
 
 ap = argparse.ArgumentParser(description='JieLi chipkey (SFCENC key) bruteforce',
                              epilog='We still can guess it no matter what!!')
@@ -15,6 +17,7 @@ ap.add_argument('offset',
 
 args = ap.parse_args()
 
+################################################################################
 
 with open(args.file, 'rb') as f:
     f.seek(int(args.offset, 0))
@@ -32,7 +35,7 @@ matcheds = {}
 for i in range(0x100):
     key = ((src[0] ^ ref[0]) * 0x0101) ^ (i << 8)
 
-    dec = jl_crypt_enc(src, key)
+    dec = cipher_bytes(jl_enc_cipher, src, key=key)
 
     nmatched = 0
 
