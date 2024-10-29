@@ -1,25 +1,48 @@
 # Firmware & co. tools
 
-This directory contains firmware-related stuff, which maybe is going to be spun off as a separate project ("jl-fwtools", perhaps? or just "jl-tools" for that matter.)
+## Firmware unpackers
 
-## fwunpack690.py
+There are a few firmware unpack utilities each working with one type of present firmware structure variants, with varying degree of completeness.
 
-The unpacker for the BR17 firmware format (used by AC690x, AC691x and AC692x series, at least)
+All of them have inherent batch unpack capability, meaning that you can specify multiple firmware files to unpack and they will go through all of them and try to unpack them.
+A directory is created that is either named after the original file or is named from the template that can be specified with the `--dirname` option.
 
-Usage: `fwunpack690.py <file> [<file> ...]`
+### fwunpack690.py
 
-It can take multiple firmware files and unpack them all, itno the `<file>_unpack/` sub-directories.
+Unpacker for the "BR17" firmware format used by the AC690x, AC691x and AC692x chip series.
 
-The generated directory structure is currently as follows:
+Usage: `fwunpack690.py [--dirname name] <file> [<file> ...]`
+
+The generated directory structure is as follows:
 
 - `jlfirmware.yaml` - The firmware structure description, its format yet to be ratified but it will be needed to repack the firmware the same way, when I finally make a packer.
 - `uboot.boot` - The uboot.boot second-stage bootloader file, more-or-less being decrypted
 - `ver.bin` - The version info file embedded in the firmware
 - `app_data/` - Sub-directory containing all the files in the user.app region, the correct order is in the jlfirmware.yaml file.
 
-## mkbfu.py
+### fwunpack_dv.py
 
-Maker for the BFU files, which are (/were) used for carrying firmware upgrades and whatnot.
+Unpacker for the "DV" firmware format used by the DV-series chips like AC520N, AC521N, AC540N etc.
+
+This is more like a generic SYD unpacker but with handling of the uboot.boot and the top-level sdram.apu file descrambling
+and recursive unpacking of the nested ".res" files.
+
+Otherwise it's simply extracting all files of the syd image together with the syd header and entry list being dumped to the "\_\_header\_\_" file.
+
+### fwunpack_newfw.py
+
+Unpacker for the "New" firmware format that is used for all current chip series (except current DV series maybe, and other misc stuff), e.g. AC693N and up, AC7xxx, etc.
+
+This one can also take a ufw file and parse it to get the actual firmware image data, so that you don't have to do it manually.
+
+This is far for complete, but at least it gives you a "decrypted" version of the flash image and extracts files for you.
+At the moment, stuff like reserved areas, etc. are not handled in any way.
+
+## Miscellaneous
+
+### mkbfu.py
+
+A "bfu" file maker.
 
 Usage: `mkbfu.py [--load-addr ADDR] [--run-addr ADDR] [--name NAME] <input> <output>`
 
@@ -38,7 +61,7 @@ Not sure yet how `FLASH` or `ALL` differ, and what is `CODE` exactly. `AUDLOGO` 
 
 Note that the file contents are placed at 512-byte offset, and the header size is aligned to a 16-byte boundary to yield byte-exact contents as the `bfumake.exe` tool from the SDK.
 
-## bruteforce.py
+### bruteforce.py
 
 A simple SFCENC key bruteforcer, which takes a file, a reference file (to check the bruteforce against) and the offset in the source file.
 
@@ -54,7 +77,7 @@ Usage: `bruteforce.py <reference> <file> <offset>`
 - `<file>`: File to bruteforce on
 - `<offset>`: Offset in the input file to the start of the encrypted area (or some region within, etc. Note that your reference should also contain expected contents).
 
-## recrypt.py
+### recrypt.py
 
 The script that re-encrypts the region in the blob from one key to another (as well as encrypting or decrypting it.)
 
