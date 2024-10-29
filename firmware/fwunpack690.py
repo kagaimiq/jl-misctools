@@ -11,9 +11,9 @@ import yaml
 
 ###################################################################################################
 
-ap = argparse.ArgumentParser(description='BR17 firmware unpacker')
+ap = argparse.ArgumentParser(description='BR17/BR20/BR21 firmware unpacker')
 
-ap.add_argument('--format', default='{fpath}_unpack',
+ap.add_argument('--dirname', default='{fpath}_unpack',
                 help='Unpack directory name template, default: "%(default)s".'
                      ' ({fpath} refers to the full file path, {fdir} refers to the directory name the file resides in, {fname} refers to the file name)')
 
@@ -123,8 +123,7 @@ class SYDReader:
 
         etype, eres, ecrc16, eoff, elen, enum, ename = struct.unpack('<BBHIII16s', self.filelist[fid])
 
-        # GB2312  because they're chinese, and most importantly they're using windows so UTF-8 is not an option at all.
-        ename = nulltermstr(ename, encoding='gb2312')
+        ename = nulltermstr(ename, 'ascii')
 
         return SYDFile(self,
             _type     = etype,
@@ -205,11 +204,9 @@ def chipkeyfile_decode(ent):
     if jl_crc16(ckdata) != ckcrc:
         raise Exception('Chipkey file CRC mismatch (from extra data!)')
 
-    # imperishable night
     key = chipkeybin_decode(ckdata)
 
-    print('>>>>> CHIP KEY %04x <<<<<' % key)
-
+    print(f'>>> Chip key: 0x{key:04X} <<<')
     print('------------------------')
 
     return key
@@ -361,7 +358,7 @@ def parsefw(fwfile, outdir:Path):
 
     #====================================================================#
 
-    outdir.mkdir(exist_ok=True)
+    outdir.mkdir(parents=True, exist_ok=True)
 
     yamlpath = outdir/'jlfirmware.yaml'
 
@@ -556,7 +553,7 @@ for fpath in args.file:
     try:
         with open(fpath, 'rb') as f:
             parsefw(f,
-                Path(args.format.format(fpath=fpath, fname=fpath.name, fdir=fpath.parent))
+                Path(args.dirname.format(fpath=fpath, fname=fpath.name, fdir=fpath.parent))
             )
 
     except Exception as e:

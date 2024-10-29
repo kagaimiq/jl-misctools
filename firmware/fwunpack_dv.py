@@ -16,7 +16,7 @@ ap.add_argument('--offset', type=anyint, default=0,
 ap.add_argument('--hdrkey', type=anyint, default=0xFFFF,
                 help='Header key (default: 0x%(default)04x)')
 
-ap.add_argument('--format', default='{fpath}_unpack',
+ap.add_argument('--dirname', default='{fpath}_unpack',
                 help='Unpack directory name template, default: "%(default)s".'
                      ' ({fpath} refers to the full file path, {fdir} refers to the directory name the file resides in, {fname} refers to the file name)')
 
@@ -44,7 +44,7 @@ def bankcb_decipher(buff, key=0xFFFF):
         totalsize = max(totalsize, offset + size)
 
         if idx == 0:
-            numbanks = idx
+            numbanks = bankid
 
         jl_enc_cipher(buff, offset, size, key)
 
@@ -109,7 +109,7 @@ def syd_dump(file, offset, outdir:Path, hkey=None):
             jl_enc_cipher(header, off, 32, hkey)
 
     # Dump the header contents
-    (outdir/'__header__.bin').write_bytes(header)
+    (outdir/'__header__').write_bytes(header)
 
     #
     # Dump the contents
@@ -163,7 +163,7 @@ for fpath in args.input:
     try:
         with open(fpath, 'rb') as f:
             parse_fw(f,
-                Path(args.format.format(fpath=fpath, fname=fpath.name, fdir=fpath.parent))
+                Path(args.dirname.format(fpath=fpath, fname=fpath.name, fdir=fpath.parent))
             )
     except Exception as e:
         print('[!]', e)
