@@ -1,5 +1,5 @@
 from jltech.crc import jl_crc16
-from jltech.cipher import jl_enc_cipher, cipher_bytes
+from jltech.cipher import jl_enc_cipher, jl_sfc_cipher, cipher_bytes
 from jltech.chipkeybin import chipkeybin_decode
 from jltech.utils import hexdump, nulltermstr
 
@@ -175,8 +175,7 @@ class SFCMap:
 
         data = bytearray(self.flash.read(self.base + baddr, bsize))
 
-        for off in range(0, bsize, 32):
-            jl_enc_cipher(data, off, min(32, bsize - off), self.key ^ ((baddr + off) >> 2))
+        jl_sfc_cipher(data, 0, len(data), -baddr, self.key)
 
         return bytes(data[addr-baddr:])
 
