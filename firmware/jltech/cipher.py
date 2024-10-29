@@ -35,9 +35,18 @@ def jl_rxgp_cipher(buff, off, size):
         rng = (rng * 16807) + (rng // 127773) * -0x7fffffff
         buff[off+i] ^= rng & 0xff
 
+def jl_sfc_cipher(buff, off, size, base, key, blocksize=32):
+    for i in range(0, size, blocksize):
+        jl_enc_cipher(buff, off + i, min(size - i, blocksize), key ^ ((off + i - base) >> 2))
+
 #-----------------------------------------------------------------------#
 
 def cipher_bytes(func, data, *args, **kvargs):
     data = bytearray(data)
     func(data, 0, len(data), *args, **kvargs)
+    return bytes(data)
+
+def cipher_copy(func, data, off, size, *args, **kvargs):
+    data = bytearray(data[off : off+size])
+    func(data, 0, size, *args, **kvargs)
     return bytes(data)
